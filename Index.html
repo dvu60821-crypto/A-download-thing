@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roblox Asset Downloader cho Dân 3D</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; }
+        input { padding: 10px; width: 60%; max-width: 300px; border-radius: 5px; border: none; margin-bottom: 10px; }
+        button { padding: 10px 20px; border-radius: 5px; border: none; background: #00bef8; color: #fff; font-weight: bold; cursor: pointer; }
+        #result { margin-top: 20px; text-align: left; max-width: 500px; margin-left: auto; margin-right: auto; background: #1e1e1e; padding: 15px; border-radius: 8px; display: none; }
+        .asset-link { display: block; margin: 8px 0; color: #00bef8; text-decoration: none; word-break: break-all; }
+        .asset-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <h2>Roblox Asset Exporter Tool</h2>
+    <p>Nhập User ID để lấy nhanh link tải Asset 3D</p>
+    
+    <input type="text" id="userIdInput" placeholder="Ví dụ: 3721724356">
+    <br>
+    <button onclick="getRobloxAssets()">Lấy Link Tải</button>
+
+    <div id="result">
+        <h3>Danh sách File Asset (.obj / .mesh / texture):</h3>
+        <div id="linksContainer"></div>
+    </div>
+
+    <script>
+        async function getRobloxAssets() {
+            const userId = document.getElementById('userIdInput').value.trim();
+            const container = document.getElementById('linksContainer');
+            const resultDiv = document.getElementById('result');
+            
+            if (!userId) {
+                alert('Vui lòng nhập User ID!');
+                return;
+            }
+
+            container.innerHTML = "Đang tải dữ liệu...";
+            resultDiv.style.display = "block";
+
+            try {
+                // Sử dụng một proxy miễn phí để tránh lỗi CORS khi gọi API Roblox từ trình duyệt
+                const proxyUrl = "https://api.allorigins.win/get?url=";
+                const robloxApi = `https://avatar.roblox.com/v1/users/${userId}/avatar`;
+                
+                const response = await fetch(proxyUrl + encodeURIComponent(robloxApi));
+                const data = await response.json();
+                const avatarData = JSON.parse(data.contents);
+
+                container.innerHTML = ""; // Xóa dòng chữ đang tải
+
+                if (avatarData.assets && avatarData.assets.length > 0) {
+                    avatarData.assets.forEach(asset => {
+                        const downloadUrl = `https://assetdelivery.roblox.com/v1/asset/?id=${asset.id}`;
+                        
+                        // Tạo thẻ link để người dùng click tải về luôn
+                        const a = document.createElement('a');
+                        a.href = downloadUrl;
+                        a.className = 'asset-link';
+                        a.target = '_blank';
+                        a.innerText = `⬇️ Tải Vật phẩm: ${asset.name} (ID: ${asset.id})`;
+                        
+                        container.appendChild(a);
+                    });
+                } else {
+                    container.innerHTML = "Không tìm thấy vật phẩm nào trên nhân vật này hoặc ID sai.";
+                }
+
+            } catch (error) {
+                container.innerHTML = "Có lỗi xảy ra khi kết nối API. Hãy thử lại sau!";
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>
