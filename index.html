@@ -4,30 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roblox Asset Downloader cho Dân 3D</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; }
         input { padding: 10px; width: 60%; max-width: 300px; border-radius: 5px; border: none; margin-bottom: 10px; font-size: 16px; }
         button { padding: 10px 20px; border-radius: 5px; border: none; background: #00bef8; color: #fff; font-weight: bold; cursor: pointer; font-size: 16px; }
-        #result { margin-top: 20px; text-align: left; max-width: 500px; margin-left: auto; margin-right: auto; background: #1e1e1e; padding: 15px; border-radius: 8px; display: none; }
-        .asset-link { display: block; margin: 12px 0; color: #00bef8; text-decoration: none; word-break: break-all; font-dash: 15px; }
-        .asset-link:hover { text-decoration: underline; }
+        #result { margin-top: 20px; text-align: left; max-width: 550px; margin-left: auto; margin-right: auto; background: #1e1e1e; padding: 15px; border-radius: 8px; display: none; }
+        .asset-item { display: flex; justify-content: space-between; align-items: center; margin: 12px 0; background: #2a2a2a; padding: 10px 12px; border-radius: 5px; }
+        .asset-name { font-size: 14px; color: #fff; word-break: break-all; max-width: 65%; text-align: left; }
+        .download-btn { padding: 6px 12px; border-radius: 4px; border: none; background: #e11d48; color: #fff; font-weight: bold; cursor: pointer; font-size: 13px; text-decoration: none; }
+        .download-btn:hover { background: #be123c; }
     </style>
 </head>
 <body>
 
-    <h2>Roblox Asset Exporter Tool</h2>
-    <p>Nhập User ID để lấy nhanh link tải Asset 3D</p>
+    <h2>Roblox Asset Exporter Tool (Full OBJ + Texture)</h2>
+    <p>Nhập User ID để tải trọn bộ tệp nén ZIP gồm Model 3D và Texture</p>
     
     <input type="text" id="userIdInput" placeholder="Ví dụ: 3721724356">
     <br>
     <button onclick="getRobloxAssets()">Lấy Link Tải</button>
 
     <div id="result">
-        <h3>Danh sách File Asset (.obj / .mesh / texture):</h3>
+        <h3>Danh sách Gói Asset Nhân Vật:</h3>
         <div id="linksContainer"></div>
     </div>
 
     <script>
+        let currentUserId = "";
+
         async function getRobloxAssets() {
             const userId = document.getElementById('userIdInput').value.trim();
             const container = document.getElementById('linksContainer');
@@ -38,11 +43,11 @@
                 return;
             }
 
-            container.innerHTML = "Đang tải dữ liệu nhân vật...";
+            currentUserId = userId;
+            container.innerHTML = "Đang quét dữ liệu phụ kiện và kết cấu nhân vật...";
             resultDiv.style.display = "block";
 
             try {
-                // Hệ thống cổng proxy corsproxy.io siêu ổn định
                 const robloxApi = `https://avatar.roblox.com/v1/users/${userId}/avatar`;
                 const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(robloxApi)}`;
                 
@@ -53,23 +58,65 @@
 
                 if (avatarData.assets && avatarData.assets.length > 0) {
                     avatarData.assets.forEach(asset => {
-                        const downloadUrl = `https://assetdelivery.roblox.com/v1/asset/?id=${asset.id}`;
-                        
-                        const a = document.createElement('a');
-                        a.href = downloadUrl;
-                        a.className = 'asset-link';
-                        a.target = '_blank';
-                        a.innerText = `⬇️ Tải: ${asset.name} (ID: ${asset.id})`;
-                        
-                        container.appendChild(a);
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'asset-item';
+
+                        const nameSpan = document.createElement('span');
+                        nameSpan.className = 'asset-name';
+                        nameSpan.innerText = `📦 ${asset.name} (ID: ${asset.id})`;
+
+                        // Nút bấm kích hoạt tải trọn bộ ZIP (Gồm OBJ và Texture)
+                        const btn = document.createElement('button');
+                        btn.className = 'download-btn';
+                        btn.innerText = "Tải Gói ZIP";
+                        btn.onclick = () => downloadFullAssetPack(asset.id, asset.name);
+
+                        itemDiv.appendChild(nameSpan);
+                        itemDiv.appendChild(btn);
+                        container.appendChild(itemDiv);
                     });
                 } else {
                     container.innerHTML = "Không tìm thấy vật phẩm hoặc ID tài khoản không tồn tại.";
                 }
 
             } catch (error) {
-                container.innerHTML = "Lỗi hệ thống khi quét API dữ liệu. Vui lòng kiểm tra lại ID!";
+                container.innerHTML = "Lỗi hệ thống khi kết nối API Roblox. Hãy thử lại!";
                 console.error(error);
+            }
+        }
+
+        // Hàm nâng cấp: Tự động gom file OBJ và ảnh Texture PNG vào một file ZIP duy nhất
+        async function downloadFullAssetPack(assetId, assetName) {
+            try {
+                const safeName = assetName.replace(/[^a-zA-Z0-9]/g, "_");
+                const zip = new JSZip();
+                
+                // 1. Lấy dữ liệu file Model 3D thô từ Roblox
+                const modelUrl = `https://assetdelivery.roblox.com/v1/asset/?id=${assetId}`;
+                const proxyModelUrl = `https://corsproxy.io/?${encodeURIComponent(modelUrl)}`;
+                const modelRes = await fetch(proxyModelUrl);
+                const modelBlob = await modelRes.blob();
+                zip.file(`${safeName}_${assetId}.obj`, modelBlob);
+
+                // 2. Lấy dữ liệu ảnh màu sắc/quần áo (Texture) tương ứng của nhân vật
+                const textureUrl = `https://www.roblox.com/asset-thumbnail/image?assetId=${currentUserId}&width=420&height=420&format=png`;
+                const proxyTextureUrl = `https://corsproxy.io/?${encodeURIComponent(textureUrl)}`;
+                const textureRes = await fetch(proxyTextureUrl);
+                const textureBlob = await textureRes.blob();
+                zip.file(`${safeName}_texture.png`, textureBlob);
+
+                // 3. Tiến hành nén thành file .zip và kích hoạt tải về máy
+                const content = await zip.generateAsync({ type: "blob" });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = `${safeName}_FullPack.zip`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+            } catch (e) {
+                alert("Gặp sự cố khi đóng gói tệp nén, vui lòng thử lại!");
+                console.error(e);
             }
         }
     </script>
